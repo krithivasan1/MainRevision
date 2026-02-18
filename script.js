@@ -46,12 +46,7 @@ function startPlayback() {
     console.log('▶ Starting playback with', timeInterval / 1000, 'second interval');
     
     // Start playing immediately
-    playNextItem();
-    
-    // Continue playing at intervals
-    playbackInterval = setInterval(() => {
-        playNextItem();
-    }, timeInterval);
+    playNextItem(timeInterval);
 }
 
 function stopPlayback() {
@@ -61,7 +56,7 @@ function stopPlayback() {
     currentPlayIndex = 0;
     
     if (playbackInterval) {
-        clearInterval(playbackInterval);
+        clearTimeout(playbackInterval);
         playbackInterval = null;
     }
     
@@ -82,7 +77,9 @@ function stopPlayback() {
     console.log('⏸ Playback stopped');
 }
 
-function playNextItem() {
+function playNextItem(timeInterval) {
+    if (!isPlaying) return;
+    
     // Filter only text items
     const textItems = editorContent.filter(item => item.type === 'text');
     
@@ -103,7 +100,7 @@ function playNextItem() {
     
     // Speak the text
     speakText(item.content, () => {
-        // After speaking, delete the text item from editorContent
+        // After speaking completes, delete the text item immediately
         const itemIndex = editorContent.findIndex(
             (el, idx) => el.type === 'text' && el.content === item.content && 
             editorContent.slice(0, idx).filter(e => e.type === 'text').length === currentPlayIndex
@@ -114,11 +111,18 @@ function playNextItem() {
             updateEditorFromContent();
             updateLineCount();
             saveContentToServer();
-            console.log('🗑️ Deleted text item');
+            console.log('🗑️ Deleted text item after speaking');
+        }
+        
+        currentPlayIndex++;
+        
+        // Wait for the interval, then play next item
+        if (isPlaying) {
+            playbackInterval = setTimeout(() => {
+                playNextItem(timeInterval);
+            }, timeInterval);
         }
     });
-    
-    currentPlayIndex++;
 }
 
 function speakText(text, onComplete) {
