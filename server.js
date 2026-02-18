@@ -110,15 +110,30 @@ async function saveContent(content) {
 }
 
 const server = http.createServer(async (req, res) => {
+    // Add CORS headers for all requests
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+    }
+    
     // API endpoints
     if (req.url === '/api/content' && req.method === 'GET') {
+        console.log('📥 GET /api/content');
         res.writeHead(200, { 'Content-Type': 'application/json' });
         const data = await loadContent();
+        console.log('   Returning', data.content.length, 'items');
         res.end(JSON.stringify(data));
         return;
     }
     
     if (req.url === '/api/content' && req.method === 'POST') {
+        console.log('📤 POST /api/content');
         let body = '';
         req.on('data', chunk => {
             body += chunk.toString();
@@ -126,10 +141,13 @@ const server = http.createServer(async (req, res) => {
         req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
+                console.log('   Saving', data.content.length, 'items');
                 await saveContent(data.content);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true }));
+                console.log('   ✅ Saved successfully');
             } catch (err) {
+                console.error('   ❌ Save failed:', err.message);
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Invalid JSON' }));
             }
