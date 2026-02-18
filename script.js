@@ -2,6 +2,154 @@ let editorContent = [];
 let saveTimeout = null;
 let refreshInterval = null;
 let lastContentHash = '';
+let isPlaying = false;
+let playbackInterval = null;
+let currentPlayIndex = 0;
+
+// Load content on page load
+window.addEventListener('DOMContentLoaded', () => {
+    loadContentFromServer();
+    startAutoRefresh();
+    setupPlaybackControls();
+    updateLineCount();
+});
+
+function setupPlaybackControls() {
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    const timeInterval = document.getElementById('timeInterval');
+    
+    playPauseBtn.addEventListener('click', () => {
+        if (isPlaying) {
+            stopPlayback();
+        } else {
+            startPlayback();
+        }
+    });
+}
+
+function startPlayback() {
+    const timeInterval = parseInt(document.getElementById('timeInterval').value) * 1000;
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    
+    isPlaying = true;
+    currentPlayIndex = 0;
+    
+    // Update button UI
+    playPauseBtn.querySelector('.play-icon').style.display = 'none';
+    playPauseBtn.querySelector('.pause-icon').style.display = 'inline';
+    playPauseBtn.querySelector('.btn-text').textContent = 'Stop';
+    playPauseBtn.classList.add('playing');
+    
+    // Stop auto-refresh during playback
+    stopAutoRefresh();
+    
+    console.log('▶ Starting playback with', timeInterval / 1000, 'second interval');
+    
+    // Start playing immediately
+    playNextItem();
+    
+    // Continue playing at intervals
+    playbackInterval = setInterval(() => {
+        playNextItem();
+    }, timeInterval);
+}
+
+function stopPlayback() {
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    
+    isPlaying = false;
+    currentPlayIndex = 0;
+    
+    if (playbackInterval) {
+        clearInterval(playbackInterval);
+        playbackInterval = null;
+    }
+    
+    // Stop any ongoing speech
+    if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+    }
+    
+    // Update button UI
+    playPauseBtn.querySelector('.play-icon').style.display = 'inline';
+    playPauseBtn.querySelector('.pause-icon').style.display = 'none';
+    playPauseBtn.querySelector('.btn-text').textContent = 'Play';
+    playPauseBtn.classList.remove('playing');
+    
+    // Resume auto-refresh
+    startAutoRefresh();
+    
+    console.log('⏸ Playback stopped');
+}
+
+function playNextItem() {
+    // Filter only text items
+    const textItems = editorContent.filter(item => item.type === 'text');
+    
+    if (textItems.length === 0) {
+        console.log('No text items to play');
+        stopPlayback();
+        return;
+    }
+    
+    if (currentPlayIndex >= textItems.length) {
+        console.log('✅ Playback completed');
+        stopPlayback();
+        return;
+    }
+    
+    const item = textItems[currentPlayIndex];
+    console.log('🔊 Speaking:', item.content.substring(0, 50) + '...');
+    
+    // Speak the text
+    speakText(item.content, () => {
+        // After speaking, delete the text item from editorContent
+        const itemIndex = editorContent.findIndex(
+            (el, idx) => el.type === 'text' && el.content === item.content && 
+            editorContent.slice(0, idx).filter(e => e.type === 'text').length === currentPlayIndex
+        );
+        
+        if (itemIndex !== -1) {
+            editorContent.splice(itemIndex, 1);
+            updateEditorFromContent();
+            updateLineCount();
+            saveContentToServer();
+            console.log('🗑️ Deleted text item');
+        }
+    });
+    
+    currentPlayIndex++;
+}
+
+function speakText(text, onComplete) {
+    if (!window.speechSynthesis) {
+        console.error('Speech synthesis not supported');
+        if (onComplete) onComplete();
+        return;
+    }
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    
+    utterance.onend = () => {
+        if (onComplete) onComplete();
+    };
+    
+    utterance.onerror = (event) => {
+        console.error('Speech error:', event);
+        if (onComplete) onComplete();
+    };
+    
+    window.speechSynthesis.speak(utterance);
+}
+
+function updateLineCount() {
+    const lineCountEl = document.getElementById('lineCount');
+    const totalLines = editorContent.length;
+    lineCountEl.textContent = `Lines: ${totalLines}`;
+}
 
 // Load content on page load
 window.addEventListener('DOMContentLoaded', () => {
@@ -73,6 +221,7 @@ async function loadContentFromServer(isAutoRefresh = false) {
             } else {
                 console.log('🔄 Content synced:', editorContent.length, 'items');
             }
+            updateLineCount();
         }
     } catch (err) {
         console.error('Failed to load content:', err);
@@ -109,6 +258,7 @@ editor.addEventListener('paste', (e) => {
 editor.addEventListener('input', () => {
     saveEditorContent();
     debounceSave();
+    updateLineCount();
 });
 
 // Pause auto-refresh when user is typing
@@ -175,6 +325,7 @@ function saveEditorContent() {
         }
     });
     console.log('Editor content updated:', editorContent.length, 'items');
+    updateLineCount();
 }
 
 function updateRevisionView() {
