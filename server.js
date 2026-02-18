@@ -5,9 +5,10 @@ const path = require('path');
 const { MongoClient } = require('mongodb');
 
 const PORT = process.env.PORT || 3000;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
+const MONGODB_URI = process.env.MONGODB_URI;
 const DB_NAME = 'wordeditor';
 const COLLECTION_NAME = 'content';
+const DATA_FILE = path.join(__dirname, 'content.json');
 
 const mimeTypes = {
     '.html': 'text/html',
@@ -18,22 +19,34 @@ const mimeTypes = {
 
 let db;
 let collection;
+let useFileStorage = false;
 
 // Connect to MongoDB
 async function connectDB() {
+    console.log('MONGODB_URI exists:', !!MONGODB_URI);
+    console.log('MONGODB_URI value:', MONGODB_URI ? MONGODB_URI.substring(0, 20) + '...' : 'undefined');
+    
+    if (!MONGODB_URI || MONGODB_URI === '' || MONGODB_URI === 'undefined') {
+        console.log('⚠️  No MongoDB URI provided, using file storage');
+        useFileStorage = true;
+        initFileStorage();
+        return;
+    }
+
     try {
+        console.log('🔄 Attempting to connect to MongoDB Atlas...');
         const client = new MongoClient(MONGODB_URI, {
-            serverSelectionTimeoutMS: 5000,
-            socketTimeoutMS: 45000,
-            tls: true,
-            tlsAllowInvalidCertificates: false,
-            retryWrites: true,
-            w: 'majority'
+            serverSelectionTimeoutMS: 10000,
+            connectTimeoutMS: 10000,
+            socketTimeoutMS: 45000
         });
+        
         await client.connect();
+        await client.db("admin").command({ ping: 1 });
+        
         db = client.db(DB_NAME);
         collection = db.collection(COLLECTION_NAME);
-        console.log('Connected to MongoDB');
+        console.log('✅ Successfully connected to MongoDB');
         
         // Initialize with empty content if collection is empty
         const count = await collection.countDocuments();
@@ -41,13 +54,29 @@ async function connectDB() {
             await collection.insertOne({ _id: 'main', content: [] });
         }
     } catch (err) {
-        console.error('MongoDB connection error:', err);
-        console.error('Error details:', err.message);
-        process.exit(1);
+        console.error('❌ MongoDB connection failed:', err.message);
+        console.log('⚠️  Falling back to file storage');
+        useFileStorage = true;
+        initFileStorage();
+    }
+}
+
+function initFileStorage() {
+    if (!fs.existsSync(DATA_FILE)) {
+        fs.writeFileSync(DATA_FILE, JSON.stringify({ content: [] }));
     }
 }
 
 async function loadContent() {
+    if (useFileStorage) {
+        try {
+            const data = fs.readFileSync(DATA_FILE, 'utf8');
+            return JSON.parse(data);
+        } catch (err) {
+            return { content: [] };
+        }
+    }
+    
     try {
         const doc = await collection.findOne({ _id: 'main' });
         return doc ? { content: doc.content } : { content: [] };
@@ -58,6 +87,16 @@ async function loadContent() {
 }
 
 async function saveContent(content) {
+    if (useFileStorage) {
+        try {
+            fs.writeFileSync(DATA_FILE, JSON.stringify({ content }, null, 2));
+        } catch (err) {
+            console.error('Error saving to file:', err);
+            throw err;
+        }
+        return;
+    }
+    
     try {
         await collection.updateOne(
             { _id: 'main' },
@@ -124,6 +163,10 @@ const server = http.createServer(async (req, res) => {
 // Start server after DB connection
 connectDB().then(() => {
     server.listen(PORT, () => {
-        console.log(`Server running at http://localhost:${PORT}/`);
+        console.log(`🚀 Server running at http://localhost:${PORT}/`);
+        console.log(`📦 Storage mode: ${useFileStorage ? 'File Storage' : 'MongoDB'}`);
     });
+}).catch(err => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
 });
