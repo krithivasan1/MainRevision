@@ -8,6 +8,14 @@
 </head>
 <body>
     <div class="container">
+        <div class="header">
+            <h1>Word Editor</h1>
+            <div class="sync-status" id="syncStatus">
+                <span class="sync-indicator">●</span>
+                <span class="sync-text">Syncing...</span>
+            </div>
+        </div>
+        
         <div class="tabs">
             <button class="tab-btn active" data-tab="editor">Word Editor</button>
             <button class="tab-btn" data-tab="revision">Word Revision</button>
@@ -15,7 +23,7 @@
 
         <div class="tab-content active" id="editor">
             <div class="editor-container">
-                <div contenteditable="true" id="wordEditor" class="word-editor"></div>
+                <div contenteditable="true" id="wordEditor" class="word-editor" placeholder="Start typing or paste content from MS Word..."></div>
             </div>
         </div>
 
