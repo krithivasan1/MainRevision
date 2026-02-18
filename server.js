@@ -22,7 +22,14 @@ let collection;
 // Connect to MongoDB
 async function connectDB() {
     try {
-        const client = new MongoClient(MONGODB_URI);
+        const client = new MongoClient(MONGODB_URI, {
+            serverSelectionTimeoutMS: 5000,
+            socketTimeoutMS: 45000,
+            tls: true,
+            tlsAllowInvalidCertificates: false,
+            retryWrites: true,
+            w: 'majority'
+        });
         await client.connect();
         db = client.db(DB_NAME);
         collection = db.collection(COLLECTION_NAME);
@@ -35,6 +42,7 @@ async function connectDB() {
         }
     } catch (err) {
         console.error('MongoDB connection error:', err);
+        console.error('Error details:', err.message);
         process.exit(1);
     }
 }
