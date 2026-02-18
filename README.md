@@ -8,36 +8,47 @@ A web-based word editor with revision tracking. Content is stored on the server 
 - Revision view to review and delete content line by line
 - Persistent storage across all devices
 
-## Deploy to Cloud (with persistent storage)
+## Deploy to Render.com (Free - Step by Step)
 
-### Option 1: Render.com (Free - Recommended)
-1. Create account at https://render.com
+### Step 1: Push to GitHub
+```cmd
+git add .
+git commit -m "Add word editor app"
+git push origin main
+```
+
+### Step 2: Deploy on Render
+1. Go to https://render.com and sign up/login
 2. Click "New +" → "Web Service"
-3. Connect your GitHub repo or upload files
-4. Settings:
+3. Click "Connect account" to link GitHub
+4. Select your repository
+5. Configure:
+   - Name: word-editor (or any name)
    - Environment: Node
    - Build Command: `npm install`
    - Start Command: `node server.js`
-5. Deploy - you'll get a public URL like `https://your-app.onrender.com`
+6. Click "Create Web Service"
+7. Wait 2-3 minutes for deployment
+8. Your public URL will be: `https://word-editor-xxxx.onrender.com`
 
-### Option 2: Railway.app (Free tier)
+### Alternative: Railway.app
 1. Go to https://railway.app
 2. Click "Start a New Project" → "Deploy from GitHub"
 3. Select your repo
-4. Railway auto-detects Node.js and deploys
-5. Get public URL
-
-### Option 3: Heroku
-```cmd
-heroku create your-app-name
-git push heroku main
-```
+4. Railway auto-deploys
+5. Click "Generate Domain" to get public URL
 
 ## Local Development
 ```cmd
 node server.js
 ```
 Visit http://localhost:3000
+
+## Important Notes
+- GitHub Pages DOES NOT work for this app (no backend support)
+- You MUST use Render, Railway, or similar Node.js hosting
+- Content persists on the server's file system
+- Free tier may sleep after inactivity (wakes up on first request)
 
 ## API Endpoints
 - GET `/api/content` - Retrieve stored content
