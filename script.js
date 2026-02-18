@@ -13,8 +13,67 @@ window.addEventListener('DOMContentLoaded', () => {
     setupPlaybackControls();
     setupFormatButton();
     setupNavigationButtons();
+    setupQuickLinks();
     updateLineCount();
 });
+
+function setupQuickLinks() {
+    const quickLinks = document.querySelectorAll('.quick-link');
+    quickLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const day = link.dataset.day;
+            jumpToDay(day);
+        });
+    });
+}
+
+function jumpToDay(day) {
+    // Switch to revision tab
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    
+    document.querySelector('[data-tab="revision"]').classList.add('active');
+    document.getElementById('revision').classList.add('active');
+    
+    // Update revision view to ensure it's rendered
+    updateRevisionView();
+    
+    // Wait a bit for rendering, then scroll to the day
+    setTimeout(() => {
+        const dateHeaders = document.querySelectorAll('.date-header');
+        let found = false;
+        
+        dateHeaders.forEach(header => {
+            const dateTitle = header.querySelector('.date-title').textContent;
+            // Look for patterns like "90", "90th", "day 90", "360", etc.
+            if (dateTitle.includes(day) || dateTitle.includes(`${day}th`) || dateTitle.includes(`day ${day}`)) {
+                // Expand the section if collapsed
+                const dateSection = header.nextElementSibling;
+                if (dateSection.classList.contains('collapsed')) {
+                    dateSection.classList.remove('collapsed');
+                    header.classList.remove('collapsed');
+                }
+                
+                // Scroll to the header
+                header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                
+                // Highlight the section briefly
+                header.style.background = '#ffeb3b';
+                setTimeout(() => {
+                    header.style.background = '';
+                }, 2000);
+                
+                found = true;
+                console.log(`📍 Jumped to ${day}th day`);
+            }
+        });
+        
+        if (!found) {
+            alert(`${day}th day not found in revision content`);
+        }
+    }, 100);
+}
 
 function setupFormatButton() {
     const formatBtn = document.getElementById('formatBtn');
@@ -149,33 +208,45 @@ function playNextItem(timeInterval) {
     }
     
     const item = textItems[currentPlayIndex];
-    console.log('🔊 Speaking:', item.content.substring(0, 50) + '...');
+    console.log(`🔊 Speaking line ${currentPlayIndex + 1}:`, item.content.substring(0, 50) + '...');
     
-    // Speak the text
+    // Speak the text (takes as long as needed to read the entire line)
     speakText(item.content, () => {
-        // After speaking completes, delete the text item immediately
-        const itemIndex = editorContent.findIndex(
-            (el, idx) => el.type === 'text' && el.content === item.content && 
-            editorContent.slice(0, idx).filter(e => e.type === 'text').length === currentPlayIndex
-        );
+        console.log(`✓ Finished speaking line ${currentPlayIndex + 1}`);
         
-        if (itemIndex !== -1) {
-            editorContent.splice(itemIndex, 1);
-            updateEditorFromContent();
-            updateLineCount();
-            saveContentToServer();
-            console.log('🗑️ Deleted text item after speaking');
-        }
+        // After speaking completes, wait for the configured interval
+        console.log(`⏱️ Waiting ${timeInterval / 1000} seconds before deleting and moving to next...`);
         
-        currentPlayIndex++;
-        
-        // Wait for the interval BEFORE playing next item (delay between consecutive texts)
-        if (isPlaying) {
-            console.log(`⏱️ Waiting ${timeInterval / 1000} seconds before next item...`);
-            playbackInterval = setTimeout(() => {
+        playbackInterval = setTimeout(() => {
+            if (!isPlaying) return; // Check if stopped during wait
+            
+            // Delete the text item from editorContent
+            const itemIndex = editorContent.findIndex(
+                (el, idx) => el.type === 'text' && el.content === item.content && 
+                editorContent.slice(0, idx).filter(e => e.type === 'text').length === currentPlayIndex
+            );
+            
+            if (itemIndex !== -1) {
+                editorContent.splice(itemIndex, 1);
+                updateEditorFromContent();
+                updateLineCount();
+                
+                // Update revision tab if it's active
+                if (document.querySelector('.tab-content.active')?.id === 'revision') {
+                    updateRevisionView();
+                }
+                
+                saveContentToServer();
+                console.log(`🗑️ Deleted line ${currentPlayIndex + 1} from both editor and revision`);
+            }
+            
+            currentPlayIndex++;
+            
+            // Play next item immediately after deletion
+            if (isPlaying) {
                 playNextItem(timeInterval);
-            }, timeInterval);
-        }
+            }
+        }, timeInterval);
     });
 }
 
@@ -423,9 +494,10 @@ function updateRevisionView() {
     Object.keys(groupedByDate).sort().forEach(dateKey => {
         const items = groupedByDate[dateKey];
         
-        // Create date header with line count
+        // Create date header with line count and ID for linking
         const dateHeader = document.createElement('div');
         dateHeader.className = 'date-header';
+        dateHeader.id = `date-${dateKey.replace(/[^a-zA-Z0-9]/g, '-')}`;
         dateHeader.innerHTML = `
             <span class="date-title">${dateKey}</span>
             <span class="date-count">(${items.length} line${items.length > 1 ? 's' : ''})</span>
@@ -501,6 +573,7 @@ function deleteItem(index) {
     editorContent.splice(index, 1);
     updateEditorFromContent();
     updateRevisionView();
+    updateLineCount();
     saveContentToServer();
 }
 

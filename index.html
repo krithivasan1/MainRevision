@@ -16,7 +16,7 @@
             <div class="header-right">
                 <div class="playback-controls">
                     <label for="timeInterval">Interval (seconds):</label>
-                    <input type="number" id="timeInterval" min="1" max="60" value="5" />
+                    <input type="number" id="timeInterval" min="1" max="60" value="3" />
                     <button id="playPauseBtn" class="control-btn">
                         <span class="play-icon">▶</span>
                         <span class="pause-icon" style="display:none;">⏸</span>
@@ -33,6 +33,12 @@
         <div class="tabs">
             <button class="tab-btn active" data-tab="editor">Word Editor</button>
             <button class="tab-btn" data-tab="revision">Word Revision</button>
+        </div>
+
+        <div class="quick-links">
+            <span class="quick-links-label">Quick Jump:</span>
+            <a href="#" class="quick-link" data-day="90">90th Day</a>
+            <a href="#" class="quick-link" data-day="360">360th Day</a>
         </div>
 
         <div class="tab-content active" id="editor">
