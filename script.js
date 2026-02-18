@@ -11,8 +11,61 @@ window.addEventListener('DOMContentLoaded', () => {
     loadContentFromServer();
     startAutoRefresh();
     setupPlaybackControls();
+    setupFormatButton();
+    setupNavigationButtons();
     updateLineCount();
 });
+
+function setupFormatButton() {
+    const formatBtn = document.getElementById('formatBtn');
+    formatBtn.addEventListener('click', () => {
+        formatContent();
+    });
+}
+
+function setupNavigationButtons() {
+    const scrollTopBtn = document.getElementById('scrollTopBtn');
+    const scrollBottomBtn = document.getElementById('scrollBottomBtn');
+    const scrollTopBtn2 = document.getElementById('scrollTopBtn2');
+    const scrollBottomBtn2 = document.getElementById('scrollBottomBtn2');
+    const revisionList = document.getElementById('revisionList');
+    
+    scrollTopBtn.addEventListener('click', () => {
+        revisionList.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    
+    scrollBottomBtn.addEventListener('click', () => {
+        revisionList.scrollTo({ top: revisionList.scrollHeight, behavior: 'smooth' });
+    });
+    
+    scrollTopBtn2.addEventListener('click', () => {
+        revisionList.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    
+    scrollBottomBtn2.addEventListener('click', () => {
+        revisionList.scrollTo({ top: revisionList.scrollHeight, behavior: 'smooth' });
+    });
+}
+
+function formatContent() {
+    // Remove empty lines (text items with only whitespace)
+    const originalLength = editorContent.length;
+    editorContent = editorContent.filter(item => {
+        if (item.type === 'text') {
+            return item.content.trim().length > 0;
+        }
+        return true; // Keep all images
+    });
+    
+    const removedCount = originalLength - editorContent.length;
+    
+    updateEditorFromContent();
+    updateLineCount();
+    saveContentToServer();
+    
+    console.log(`🧹 Formatted: Removed ${removedCount} empty lines`);
+    alert(`Removed ${removedCount} empty line(s)`);
+}
 
 function setupPlaybackControls() {
     const playPauseBtn = document.getElementById('playPauseBtn');
@@ -116,8 +169,9 @@ function playNextItem(timeInterval) {
         
         currentPlayIndex++;
         
-        // Wait for the interval, then play next item
+        // Wait for the interval BEFORE playing next item (delay between consecutive texts)
         if (isPlaying) {
+            console.log(`⏱️ Waiting ${timeInterval / 1000} seconds before next item...`);
             playbackInterval = setTimeout(() => {
                 playNextItem(timeInterval);
             }, timeInterval);
@@ -341,24 +395,106 @@ function updateRevisionView() {
         return;
     }
     
+    // Group content by date (extract dates from file paths like C:\Users\...)
+    const groupedByDate = {};
+    const ungrouped = [];
+    
     editorContent.forEach((item, index) => {
-        const div = document.createElement('div');
-        div.className = 'revision-item';
+        item.originalIndex = index;
         
         if (item.type === 'text') {
-            div.textContent = item.content;
-        } else if (item.type === 'image') {
-            const img = document.createElement('img');
-            img.src = item.content;
-            div.appendChild(img);
+            // Try to extract date pattern from text (e.g., C:\Users\date\...)
+            const dateMatch = item.content.match(/[A-Z]:\\[^\\]+\\([^\\]+)/);
+            if (dateMatch) {
+                const dateKey = dateMatch[1];
+                if (!groupedByDate[dateKey]) {
+                    groupedByDate[dateKey] = [];
+                }
+                groupedByDate[dateKey].push(item);
+            } else {
+                ungrouped.push(item);
+            }
+        } else {
+            ungrouped.push(item);
         }
+    });
+    
+    // Display grouped content
+    Object.keys(groupedByDate).sort().forEach(dateKey => {
+        const items = groupedByDate[dateKey];
         
-        div.addEventListener('click', () => {
-            deleteItem(index);
+        // Create date header with line count
+        const dateHeader = document.createElement('div');
+        dateHeader.className = 'date-header';
+        dateHeader.innerHTML = `
+            <span class="date-title">${dateKey}</span>
+            <span class="date-count">(${items.length} line${items.length > 1 ? 's' : ''})</span>
+        `;
+        dateHeader.addEventListener('click', () => {
+            const dateSection = dateHeader.nextElementSibling;
+            dateSection.classList.toggle('collapsed');
+            dateHeader.classList.toggle('collapsed');
+        });
+        revisionList.appendChild(dateHeader);
+        
+        // Create date section
+        const dateSection = document.createElement('div');
+        dateSection.className = 'date-section';
+        
+        items.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'revision-item';
+            div.textContent = item.content;
+            
+            div.addEventListener('click', () => {
+                deleteItem(item.originalIndex);
+            });
+            
+            dateSection.appendChild(div);
         });
         
-        revisionList.appendChild(div);
+        revisionList.appendChild(dateSection);
     });
+    
+    // Display ungrouped content
+    if (ungrouped.length > 0) {
+        const ungroupedHeader = document.createElement('div');
+        ungroupedHeader.className = 'date-header';
+        ungroupedHeader.innerHTML = `
+            <span class="date-title">Other Content</span>
+            <span class="date-count">(${ungrouped.length} item${ungrouped.length > 1 ? 's' : ''})</span>
+        `;
+        ungroupedHeader.addEventListener('click', () => {
+            const ungroupedSection = ungroupedHeader.nextElementSibling;
+            ungroupedSection.classList.toggle('collapsed');
+            ungroupedHeader.classList.toggle('collapsed');
+        });
+        revisionList.appendChild(ungroupedHeader);
+        
+        const ungroupedSection = document.createElement('div');
+        ungroupedSection.className = 'date-section';
+        
+        ungrouped.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'revision-item';
+            
+            if (item.type === 'text') {
+                div.textContent = item.content;
+            } else if (item.type === 'image') {
+                const img = document.createElement('img');
+                img.src = item.content;
+                div.appendChild(img);
+            }
+            
+            div.addEventListener('click', () => {
+                deleteItem(item.originalIndex);
+            });
+            
+            ungroupedSection.appendChild(div);
+        });
+        
+        revisionList.appendChild(ungroupedSection);
+    }
 }
 
 function deleteItem(index) {

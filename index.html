@@ -36,13 +36,26 @@
         </div>
 
         <div class="tab-content active" id="editor">
+            <div class="editor-toolbar">
+                <button id="formatBtn" class="toolbar-btn">
+                    <span>🧹</span> Format (Remove Empty Lines)
+                </button>
+            </div>
             <div class="editor-container">
                 <div contenteditable="true" id="wordEditor" class="word-editor" placeholder="Start typing or paste content from MS Word..."></div>
             </div>
         </div>
 
         <div class="tab-content" id="revision">
+            <div class="revision-nav">
+                <button id="scrollTopBtn" class="nav-btn">⬆ Top</button>
+                <button id="scrollBottomBtn" class="nav-btn">⬇ Bottom</button>
+            </div>
             <div class="revision-container" id="revisionList"></div>
+            <div class="revision-nav bottom">
+                <button id="scrollTopBtn2" class="nav-btn">⬆ Top</button>
+                <button id="scrollBottomBtn2" class="nav-btn">⬇ Bottom</button>
+            </div>
         </div>
     </div>
 
