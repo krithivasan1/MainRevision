@@ -5,6 +5,7 @@ let lastContentHash = '';
 let isPlaying = false;
 let playbackInterval = null;
 let currentPlayIndex = 0;
+let playbackSnapshot = []; // Snapshot of items to play
 
 // Load content on page load
 window.addEventListener('DOMContentLoaded', () => {
@@ -143,6 +144,16 @@ function startPlayback() {
     const timeInterval = parseInt(document.getElementById('timeInterval').value) * 1000;
     const playPauseBtn = document.getElementById('playPauseBtn');
     
+    // Create a snapshot of text items to play
+    playbackSnapshot = editorContent
+        .map((item, index) => ({ ...item, snapshotIndex: index }))
+        .filter(item => item.type === 'text');
+    
+    if (playbackSnapshot.length === 0) {
+        alert('No text items to play');
+        return;
+    }
+    
     isPlaying = true;
     currentPlayIndex = 0;
     
@@ -155,7 +166,7 @@ function startPlayback() {
     // Stop auto-refresh during playback
     stopAutoRefresh();
     
-    console.log('▶ Starting playback with', timeInterval / 1000, 'second interval');
+    console.log(`▶ Starting playback with ${playbackSnapshot.length} text items, ${timeInterval / 1000} second interval`);
     
     // Start playing immediately
     playNextItem(timeInterval);
@@ -166,6 +177,7 @@ function stopPlayback() {
     
     isPlaying = false;
     currentPlayIndex = 0;
+    playbackSnapshot = [];
     
     if (playbackInterval) {
         clearTimeout(playbackInterval);
@@ -192,42 +204,37 @@ function stopPlayback() {
 function playNextItem(timeInterval) {
     if (!isPlaying) return;
     
-    // Filter only text items
-    const textItems = editorContent.filter(item => item.type === 'text');
-    
-    if (textItems.length === 0) {
-        console.log('No text items to play');
+    if (currentPlayIndex >= playbackSnapshot.length) {
+        console.log('✅ Playback completed - all items processed');
         stopPlayback();
         return;
     }
     
-    if (currentPlayIndex >= textItems.length) {
-        console.log('✅ Playback completed');
-        stopPlayback();
-        return;
-    }
-    
-    const item = textItems[currentPlayIndex];
-    console.log(`🔊 Speaking line ${currentPlayIndex + 1}:`, item.content.substring(0, 50) + '...');
+    const item = playbackSnapshot[currentPlayIndex];
+    console.log(`🔊 [${currentPlayIndex + 1}/${playbackSnapshot.length}] Speaking:`, item.content.substring(0, 50) + '...');
     
     // Speak the text (takes as long as needed to read the entire line)
     speakText(item.content, () => {
         console.log(`✓ Finished speaking line ${currentPlayIndex + 1}`);
         
         // After speaking completes, wait for the configured interval
-        console.log(`⏱️ Waiting ${timeInterval / 1000} seconds before deleting and moving to next...`);
+        console.log(`⏱️ Waiting ${timeInterval / 1000} seconds before deleting...`);
         
         playbackInterval = setTimeout(() => {
             if (!isPlaying) return; // Check if stopped during wait
             
-            // Delete the text item from editorContent
-            const itemIndex = editorContent.findIndex(
-                (el, idx) => el.type === 'text' && el.content === item.content && 
-                editorContent.slice(0, idx).filter(e => e.type === 'text').length === currentPlayIndex
-            );
+            // Find and delete the item by matching content
+            // Search from the beginning to find the first matching text item
+            let foundIndex = -1;
+            for (let i = 0; i < editorContent.length; i++) {
+                if (editorContent[i].type === 'text' && editorContent[i].content === item.content) {
+                    foundIndex = i;
+                    break;
+                }
+            }
             
-            if (itemIndex !== -1) {
-                editorContent.splice(itemIndex, 1);
+            if (foundIndex !== -1) {
+                editorContent.splice(foundIndex, 1);
                 updateEditorFromContent();
                 updateLineCount();
                 
@@ -238,6 +245,8 @@ function playNextItem(timeInterval) {
                 
                 saveContentToServer();
                 console.log(`🗑️ Deleted line ${currentPlayIndex + 1} from both editor and revision`);
+            } else {
+                console.warn(`⚠️ Could not find item to delete: ${item.content.substring(0, 30)}...`);
             }
             
             currentPlayIndex++;
