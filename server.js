@@ -1,9 +1,13 @@
+require('dotenv').config();
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { MongoClient } = require('mongodb');
 
 const PORT = process.env.PORT || 3000;
-const DATA_FILE = path.join(__dirname, 'content.json');
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
+const DB_NAME = 'wordeditor';
+const COLLECTION_NAME = 'content';
 
 const mimeTypes = {
     '.html': 'text/html',
@@ -12,29 +16,57 @@ const mimeTypes = {
     '.json': 'application/json'
 };
 
-// Initialize data file if it doesn't exist
-if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify({ content: [] }));
+let db;
+let collection;
+
+// Connect to MongoDB
+async function connectDB() {
+    try {
+        const client = new MongoClient(MONGODB_URI);
+        await client.connect();
+        db = client.db(DB_NAME);
+        collection = db.collection(COLLECTION_NAME);
+        console.log('Connected to MongoDB');
+        
+        // Initialize with empty content if collection is empty
+        const count = await collection.countDocuments();
+        if (count === 0) {
+            await collection.insertOne({ _id: 'main', content: [] });
+        }
+    } catch (err) {
+        console.error('MongoDB connection error:', err);
+        process.exit(1);
+    }
 }
 
-function loadContent() {
+async function loadContent() {
     try {
-        const data = fs.readFileSync(DATA_FILE, 'utf8');
-        return JSON.parse(data);
+        const doc = await collection.findOne({ _id: 'main' });
+        return doc ? { content: doc.content } : { content: [] };
     } catch (err) {
+        console.error('Error loading content:', err);
         return { content: [] };
     }
 }
 
-function saveContent(content) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify({ content }, null, 2));
+async function saveContent(content) {
+    try {
+        await collection.updateOne(
+            { _id: 'main' },
+            { $set: { content: content } },
+            { upsert: true }
+        );
+    } catch (err) {
+        console.error('Error saving content:', err);
+        throw err;
+    }
 }
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
     // API endpoints
     if (req.url === '/api/content' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        const data = loadContent();
+        const data = await loadContent();
         res.end(JSON.stringify(data));
         return;
     }
@@ -44,10 +76,10 @@ const server = http.createServer((req, res) => {
         req.on('data', chunk => {
             body += chunk.toString();
         });
-        req.on('end', () => {
+        req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
-                saveContent(data.content);
+                await saveContent(data.content);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true }));
             } catch (err) {
@@ -81,6 +113,9 @@ const server = http.createServer((req, res) => {
     });
 });
 
-server.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}/`);
+// Start server after DB connection
+connectDB().then(() => {
+    server.listen(PORT, () => {
+        console.log(`Server running at http://localhost:${PORT}/`);
+    });
 });
