@@ -14,66 +14,29 @@ window.addEventListener('DOMContentLoaded', () => {
     setupPlaybackControls();
     setupFormatButton();
     setupNavigationButtons();
-    setupQuickLinks();
     updateLineCount();
+    checkStorageStatus();
 });
 
-function setupQuickLinks() {
-    const quickLinks = document.querySelectorAll('.quick-link');
-    quickLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const day = link.dataset.day;
-            jumpToDay(day);
-        });
-    });
-}
-
-function jumpToDay(day) {
-    // Switch to revision tab
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    
-    document.querySelector('[data-tab="revision"]').classList.add('active');
-    document.getElementById('revision').classList.add('active');
-    
-    // Update revision view to ensure it's rendered
-    updateRevisionView();
-    
-    // Wait a bit for rendering, then scroll to the day
-    setTimeout(() => {
-        const dateHeaders = document.querySelectorAll('.date-header');
-        let found = false;
+async function checkStorageStatus() {
+    try {
+        const response = await fetch('/api/status');
+        const status = await response.json();
+        const syncText = document.querySelector('.sync-text');
         
-        dateHeaders.forEach(header => {
-            const dateTitle = header.querySelector('.date-title').textContent;
-            // Look for patterns like "90", "90th", "day 90", "360", etc.
-            if (dateTitle.includes(day) || dateTitle.includes(`${day}th`) || dateTitle.includes(`day ${day}`)) {
-                // Expand the section if collapsed
-                const dateSection = header.nextElementSibling;
-                if (dateSection.classList.contains('collapsed')) {
-                    dateSection.classList.remove('collapsed');
-                    header.classList.remove('collapsed');
-                }
-                
-                // Scroll to the header
-                header.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                
-                // Highlight the section briefly
-                header.style.background = '#ffeb3b';
-                setTimeout(() => {
-                    header.style.background = '';
-                }, 2000);
-                
-                found = true;
-                console.log(`📍 Jumped to ${day}th day`);
-            }
-        });
-        
-        if (!found) {
-            alert(`${day}th day not found in revision content`);
+        if (status.storage === 'file') {
+            syncText.textContent = '⚠️ File Storage (Not Persistent)';
+            syncText.style.color = '#ff9800';
+            console.warn('⚠️ Using file storage - content may be lost on server restart');
+            console.warn('💡 Setup MongoDB for persistent storage - see QUICK_MONGODB_SETUP.md');
+        } else {
+            syncText.textContent = '✓ MongoDB (Persistent)';
+            syncText.style.color = '#4CAF50';
+            console.log('✅ Using MongoDB - content persists across sessions');
         }
-    }, 100);
+    } catch (err) {
+        console.error('Failed to check storage status:', err);
+    }
 }
 
 function setupFormatButton() {
@@ -475,107 +438,25 @@ function updateRevisionView() {
         return;
     }
     
-    // Group content by date (extract dates from file paths like C:\Users\...)
-    const groupedByDate = {};
-    const ungrouped = [];
-    
+    // Display all content as-is, same as Word Editor
     editorContent.forEach((item, index) => {
-        item.originalIndex = index;
+        const div = document.createElement('div');
+        div.className = 'revision-item';
         
         if (item.type === 'text') {
-            // Try to extract date pattern from text (e.g., C:\Users\date\...)
-            const dateMatch = item.content.match(/[A-Z]:\\[^\\]+\\([^\\]+)/);
-            if (dateMatch) {
-                const dateKey = dateMatch[1];
-                if (!groupedByDate[dateKey]) {
-                    groupedByDate[dateKey] = [];
-                }
-                groupedByDate[dateKey].push(item);
-            } else {
-                ungrouped.push(item);
-            }
-        } else {
-            ungrouped.push(item);
-        }
-    });
-    
-    // Display grouped content
-    Object.keys(groupedByDate).sort().forEach(dateKey => {
-        const items = groupedByDate[dateKey];
-        
-        // Create date header with line count and ID for linking
-        const dateHeader = document.createElement('div');
-        dateHeader.className = 'date-header';
-        dateHeader.id = `date-${dateKey.replace(/[^a-zA-Z0-9]/g, '-')}`;
-        dateHeader.innerHTML = `
-            <span class="date-title">${dateKey}</span>
-            <span class="date-count">(${items.length} line${items.length > 1 ? 's' : ''})</span>
-        `;
-        dateHeader.addEventListener('click', () => {
-            const dateSection = dateHeader.nextElementSibling;
-            dateSection.classList.toggle('collapsed');
-            dateHeader.classList.toggle('collapsed');
-        });
-        revisionList.appendChild(dateHeader);
-        
-        // Create date section
-        const dateSection = document.createElement('div');
-        dateSection.className = 'date-section';
-        
-        items.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'revision-item';
             div.textContent = item.content;
-            
-            div.addEventListener('click', () => {
-                deleteItem(item.originalIndex);
-            });
-            
-            dateSection.appendChild(div);
+        } else if (item.type === 'image') {
+            const img = document.createElement('img');
+            img.src = item.content;
+            div.appendChild(img);
+        }
+        
+        div.addEventListener('click', () => {
+            deleteItem(index);
         });
         
-        revisionList.appendChild(dateSection);
+        revisionList.appendChild(div);
     });
-    
-    // Display ungrouped content
-    if (ungrouped.length > 0) {
-        const ungroupedHeader = document.createElement('div');
-        ungroupedHeader.className = 'date-header';
-        ungroupedHeader.innerHTML = `
-            <span class="date-title">Other Content</span>
-            <span class="date-count">(${ungrouped.length} item${ungrouped.length > 1 ? 's' : ''})</span>
-        `;
-        ungroupedHeader.addEventListener('click', () => {
-            const ungroupedSection = ungroupedHeader.nextElementSibling;
-            ungroupedSection.classList.toggle('collapsed');
-            ungroupedHeader.classList.toggle('collapsed');
-        });
-        revisionList.appendChild(ungroupedHeader);
-        
-        const ungroupedSection = document.createElement('div');
-        ungroupedSection.className = 'date-section';
-        
-        ungrouped.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'revision-item';
-            
-            if (item.type === 'text') {
-                div.textContent = item.content;
-            } else if (item.type === 'image') {
-                const img = document.createElement('img');
-                img.src = item.content;
-                div.appendChild(img);
-            }
-            
-            div.addEventListener('click', () => {
-                deleteItem(item.originalIndex);
-            });
-            
-            ungroupedSection.appendChild(div);
-        });
-        
-        revisionList.appendChild(ungroupedSection);
-    }
 }
 
 function deleteItem(index) {

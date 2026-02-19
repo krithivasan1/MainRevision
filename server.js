@@ -132,6 +132,15 @@ const server = http.createServer(async (req, res) => {
         return;
     }
     
+    if (req.url === '/api/status' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+            storage: useFileStorage ? 'file' : 'mongodb',
+            persistent: !useFileStorage
+        }));
+        return;
+    }
+    
     if (req.url === '/api/content' && req.method === 'POST') {
         console.log('📤 POST /api/content');
         let body = '';

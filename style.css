@@ -146,37 +146,6 @@ body {
     color: white;
 }
 
-.quick-links {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    padding: 12px 20px;
-    background: #fff3e0;
-    border-bottom: 1px solid #ffb74d;
-}
-
-.quick-links-label {
-    font-weight: 600;
-    color: #e65100;
-    font-size: 14px;
-}
-
-.quick-link {
-    padding: 6px 16px;
-    background: #ff9800;
-    color: white;
-    text-decoration: none;
-    border-radius: 4px;
-    font-size: 14px;
-    font-weight: 500;
-    transition: background 0.3s;
-}
-
-.quick-link:hover {
-    background: #f57c00;
-    text-decoration: none;
-}
-
 .tab-content {
     display: none;
     padding: 20px;
